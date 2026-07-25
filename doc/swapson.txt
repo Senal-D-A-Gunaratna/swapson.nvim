@@ -1,0 +1,196 @@
+*swapson.nvim* Plugin for swapping mason.nvim package managers to faster alternatives
+
+==============================================================================
+CONTENTS                                            *swapson-contents*
+
+    1. Introduction .................... |swapson-introduction|
+    2. Requirements .................... |swapson-requirements|
+    3. Installation .................... |swapson-installation|
+    4. Configuration ................... |swapson-configuration|
+    5. Commands ........................ |swapson-commands|
+    6. Health check .................... |swapson-health|
+    7. API ............................. |swapson-api|
+    8. Reverting ....................... |swapson-reverting|
+    9. Caveats ......................... |swapson-caveats|
+    10. License ........................ |swapson-license|
+
+==============================================================================
+1. INTRODUCTION                                    *swapson-introduction*
+
+swapson.nvim is a companion plugin for
+https://github.com/mason-org/mason.nvim that routes package installs through
+faster alternative package managers instead of the defaults (npm, pip).
+
+Supported swaps >
+    mason manager   Default tool    Swapped tool
+    npm             npm             bun
+    pip (pypi)      pip             uv
+<
+
+When |node| is not found on $PATH, swapson.nvim creates a shell wrapper at
+<mason_install_root>/bin/node that delegates to |bun|, so npm-published
+packages with |#!/usr/bin/env node| shebangs still resolve.
+
+How it works~
+
+swapson.nvim monkeypatches mason.nvim's internal manager modules at runtime,
+replacing the |init|, |install|, and |uninstall| functions with tool-specific
+alternatives. The patches are applied to the module tables cached in
+|package.loaded|, which every mason.nvim internal that requires the same
+module path shares. No files are modified.
+
+==============================================================================
+2. REQUIREMENTS                                    *swapson-requirements*
+
+    - Neovim >= 0.7.0
+    - mason.nvim (https://github.com/mason-org/mason.nvim)
+    - |bun| installed and on $PATH (for npm swaps)
+    - |uv| installed and on $PATH (for pip swaps)
+    - Linux (tested); macOS should work but is unverified; Windows is not
+      currently supported (node shim is POSIX shell only)
+
+==============================================================================
+3. INSTALLATION                                    *swapson-installation*
+
+lazy.nvim >
+
+    {
+        "Senal-D-A-Gunaratna/swapson.nvim",
+        dependencies = {
+            "mason-org/mason.nvim",
+        },
+        config = function()
+            require("swapson").setup({
+                npm = {
+                    enabled = true,
+                    tool = "bun",
+                    patch_version_lookup = true,
+                },
+                pip = {
+                    enabled = true,
+                    tool = "uv",
+                },
+            })
+        end,
+    }
+
+The |dependencies| key ensures mason.nvim loads before swapson.nvim, which is
+required since swapson.nvim patches mason.nvim's already-loaded modules.
+
+Omitting any field falls back to the defaults inside |init.lua|.
+
+==============================================================================
+4. CONFIGURATION                                   *swapson-configuration*
+
+>lua
+    require("swapson").setup({
+        npm = {
+            enabled = true,              -- set false to skip npm->bun patching
+            tool = "bun",                -- the bun binary name/path
+
+            -- Whether to also patch mason's npm version-lookup client
+            -- (npm view --json). Needed on systems with NO npm installed
+            -- at all, since version lookups would otherwise still shell
+            -- out to npm.
+            patch_version_lookup = true,
+        },
+        pip = {
+            enabled = true,              -- set false to skip pip->uv patching
+            tool = "uv",                 -- the uv binary name/path
+        },
+    })
+<
+
+npm.enabled                                    *swapson-config-npm-enabled*
+    Boolean. Set |false| to skip patching the npm manager. Default: |true|.
+
+npm.tool                                       *swapson-config-npm-tool*
+    String. The bun binary name or path. Default: |"bun"|.
+
+npm.patch_version_lookup             *swapson-config-npm-patch_version_lookup*
+    Boolean. Whether to also patch mason's npm version-lookup client
+    (|npm view --json|). Set to |true| on systems with no |npm| installed at
+    all. Default: |false|.
+
+pip.enabled                                    *swapson-config-pip-enabled*
+    Boolean. Set |false| to skip patching the pip manager. Default: |true|.
+
+pip.tool                                       *swapson-config-pip-tool*
+    String. The uv binary name or path. Default: |"uv"|.
+
+Each manager falls back gracefully to mason's default behavior if its
+configured tool is not found on $PATH, with a |vim.notify()| warning.
+
+==============================================================================
+5. COMMANDS                                      *swapson-commands*
+
+swapson.nvim does not define any user-exposed Ex commands. All functionality
+is accessed via the Lua API (see |swapson-api|).
+
+==============================================================================
+6. HEALTH CHECK                                  *swapson-health*
+
+Run >
+
+    :checkhealth swapson
+
+to diagnose your swapson.nvim setup. The health check reports:
+
+    - Whether mason.nvim is installed and loadable
+    - Whether |bun| and |uv| binaries are on $PATH
+    - Whether each manager is currently patched
+    - Whether a real |node| is available or a bun-based node shim will be
+      created
+    - The node shim file permissions
+    - Whether |patch_version_lookup| is active
+
+The health check is read-only: it never creates, modifies, or removes files.
+
+==============================================================================
+7. API                                           *swapson-api*
+
+setup({opts})                                   *swapson-api-setup*
+    Apply patches to mason.nvim internals.
+
+    Parameters: ~
+        {opts}? (table)  Optional configuration table. See
+                         |swapson-configuration| for the structure.
+
+restore()                                       *swapson-api-restore*
+    Restore all mason.nvim manager functions to their originals and remove
+    the node shim. Useful for A/B testing or if a swapped install misbehaves.
+
+==============================================================================
+8. REVERTING                                     *swapson-reverting*
+
+Call >
+
+    :lua require("swapson").restore()
+
+to restore all mason.nvim manager functions to their originals. This also
+removes the node shim if it was created by swapson.nvim.
+
+==============================================================================
+9. CAVEATS                                       *swapson-caveats*
+
+swapson.nvim patches private Lua modules internal to mason.nvim:
+
+    - |mason-core.installer.managers.npm|
+    - |mason-core.installer.managers.pypi|
+    - |mason.providers.client.npm| (optional)
+
+These modules are not part of mason.nvim's public API. Future mason.nvim
+releases may refactor or rename them without a semver-major bump, which could
+break swapson.nvim silently.
+
+If swapson.nvim stops working after a mason.nvim update, check
+https://github.com/mason-org/mason.nvim/releases for internal module changes
+and file an issue.
+
+==============================================================================
+10. LICENSE                                      *swapson-license*
+
+MIT
+
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:
