@@ -1,6 +1,6 @@
 local M = {}
 
---- Map from manager name to { module = table, originals = table }
+--- Map from manager name to { module = table, originals = table, revert = fun }
 local patches = {}
 local patched = false
 local opts = nil
@@ -10,13 +10,13 @@ function M.is_patched()
 end
 
 ---@param manager string
----@param entry { module: table, originals: table }
+---@param entry { module: table, originals: table, revert: fun }
 function M.set_originals(manager, entry)
     patches[manager] = entry
 end
 
 ---@param manager string
----@return { module: table, originals: table }|nil
+---@return { module: table, originals: table, revert: fun }|nil
 function M.get_originals(manager)
     return patches[manager]
 end
@@ -52,10 +52,9 @@ end
 
 --- Restore all mason.nvim manager patches to their original state.
 function M.restore()
-    for name, entry in pairs(patches) do
-        local strategy_ok, strategy = pcall(require, ("swapson.managers.%s"):format(name))
-        if strategy_ok and strategy.revert then
-            strategy.revert(entry.module, entry.originals)
+    for _, entry in pairs(patches) do
+        if entry.revert then
+            entry.revert(entry.module, entry.originals)
         end
     end
 

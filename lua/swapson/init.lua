@@ -51,7 +51,7 @@ function M.setup(opts)
                 local ok_mod, mod = pcall(require, manager.manager_module)
                 if ok_mod and type(mod) == "table" then
                     local originals = manager.apply(mod, config)
-                    state.set_originals(manager.name, { module = mod, originals = originals })
+                    state.set_originals(manager.name, { module = mod, originals = originals, revert = manager.revert })
                 else
                     vim.notify(
                         ("swapson.nvim: failed to load %s. "
@@ -69,9 +69,17 @@ function M.setup(opts)
     if npm_config and npm_config.enabled and npm_config.patch_version_lookup then
         local ok_client, npm_client = pcall(require, "mason.providers.client.npm")
         if ok_client and type(npm_client) == "table" then
-            local version_lookup = require "swapson.version_lookup"
-            local version_originals = version_lookup.apply(npm_client, { tool = npm_config.tool })
-            state.set_originals("version_lookup", { module = npm_client, originals = version_originals })
+            local ok_vl, version_lookup = pcall(require, "swapson.version_lookup")
+            if not ok_vl then
+                vim.notify(
+                    "swapson.nvim: patch_version_lookup=true but swapson.version_lookup not found. "
+                        .. "Skipping version lookup patch.",
+                    vim.log.levels.WARN
+                )
+            else
+                local version_originals = version_lookup.apply(npm_client, { tool = npm_config.tool })
+                state.set_originals("version_lookup", { module = npm_client, originals = version_originals, revert = version_lookup.revert })
+            end
         else
             vim.notify(
                 "swapson.nvim: patch_version_lookup=true but mason.providers.client.npm not found. "

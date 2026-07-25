@@ -1,6 +1,6 @@
 local M = {}
 
-local function check_tool_config(state, name, settings_key)
+local function check_tool_config(state, settings_key)
     local configured_opts = state.get_opts()
     local manager_config = (configured_opts or {})[settings_key] or {}
     local tool = manager_config.tool or (settings_key == "npm" and "bun") or "uv"
@@ -47,8 +47,8 @@ function M.check()
 
     local state = require "swapson.state"
 
-    check_tool_config(state, "npm", "npm")
-    check_tool_config(state, "pip", "pip")
+    check_tool_config(state, "npm")
+    check_tool_config(state, "pip")
 
     -- Node shim status
     local node_found = vim.fn.executable "node" == 1
