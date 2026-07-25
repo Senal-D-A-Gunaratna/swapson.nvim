@@ -28,7 +28,7 @@ Only skip a commit if the change is trivially revertible (e.g., a single `git ch
 
 # node-shim regression verification
 
-When `node` is not on PATH, bunson.setup() creates a shell wrapper at
+When `node` is not on PATH, swapson.node_shim creates a shell wrapper at
 `<install_root_dir>/bin/node` that delegates to `bun`, so that
 `#!/usr/bin/env node` shebangs in LSP servers resolve correctly.
 
@@ -43,7 +43,7 @@ which bun   # should succeed
 ~/.local/share/nvim/mason/bin/cspell-lsp --help
 # expected: "env: 'node': No such file or directory"
 
-# 3. Simulate what bunson.setup() does – create the node shim
+# 3. Simulate what swapson.setup() does – create the node shim
 MASON_BIN=~/.local/share/nvim/mason/bin
 mkdir -p "$MASON_BIN"
 cat > "$MASON_BIN/node" << 'SCRIPT'
@@ -60,20 +60,20 @@ PATH="$MASON_BIN:$PATH" ~/.local/share/nvim/mason/bin/cspell-lsp --help
 ## Automated check
 
 ```lua
--- After require("bunson").setup():
+-- After require("swapson").setup():
 if vim.fn.executable("node") == 0 then
     local mason_settings = require("mason.settings")
     local node_shim = mason_settings.current.install_root_dir .. "/bin/node"
     assert(vim.fn.executable(node_shim) == 1,
-        "bunson should create " .. node_shim .. " when node is not on PATH")
+        "swapson should create " .. node_shim .. " when node is not on PATH")
 end
 
--- After require("bunson").restore():
+-- After require("swapson").restore():
 -- (simulate by calling it right after setup above)
 if vim.fn.executable("node") == 0 then
     local mason_settings = require("mason.settings")
     local node_shim = mason_settings.current.install_root_dir .. "/bin/node"
     assert(vim.fn.filereadable(node_shim) == 0,
-        "bunson should remove " .. node_shim .. " on restore()")
+        "swapson should remove " .. node_shim .. " on restore()")
 end
 ```

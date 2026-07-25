@@ -1,8 +1,16 @@
 local M = {}
 
+M.name = "npm"
+M.manager_module = "mason-core.installer.managers.npm"
+M.settings_key = "npm"
+
+function M.check_tool(tool)
+    return vim.fn.executable(tool) == 1
+end
+
 ---@async
 ---@param npm_manager table
----@param opts { bun_cmd: string }
+---@param opts { tool: string }
 ---@return { init: fun(...), install: fun(...), uninstall: fun(...) }
 function M.apply(npm_manager, opts)
     local Result = require "mason-core.result"
@@ -16,35 +24,21 @@ function M.apply(npm_manager, opts)
         uninstall = npm_manager.uninstall,
     }
 
-    -- Patch init()
-    -- Original behavior: spawns `npm init --yes --scope=mason`, then writes .npmrc with
-    -- install-strategy=shallow (npm >=9) or global-style=true (npm <9) to force a flat install layout.
-    -- Bun variant: no-op. bun add auto-creates a package.json if none exists (tested behavior),
-    -- and bun's default node_modules layout is already flat — no config equivalent needed.
-    ---@async
     npm_manager.init = function()
-        log.debug "bunson: init (no-op — bun add creates package.json automatically)"
+        log.debug "swapson: npm init (no-op — bun add creates package.json automatically)"
         local ctx = installer.context()
         return Result.try(function(_try)
             ctx.stdio_sink:stdout "Skipped npm init (bun add handles package.json creation).\n"
         end)
     end
 
-    -- Patch install()
-    -- Original behavior: spawns `npm install "<pkg>@<version>" [extra_packages] [install_extra_args]`
-    -- Bun variant: spawns `bun add "<pkg>@<version>" [extra_packages] [install_extra_args]`
-    -- bun add saves to package.json (same as npm install in npm 5+) — fine for mason's isolated install dir.
-    ---@async
-    ---@param pkg string
-    ---@param version string
-    ---@param install_opts? { extra_packages?: string[], install_extra_args?: string[] }
     npm_manager.install = function(pkg, version, install_opts)
         install_opts = install_opts or {}
-        log.fmt_debug("bunson: install %s %s %s", pkg, version, install_opts)
+        log.fmt_debug("swapson: npm install %s %s %s", pkg, version, install_opts)
         local ctx = installer.context()
         ctx:require(SystemPackage.sfw)
-        ctx.stdio_sink:stdout(("Installing npm package %s@%s via bun…\n"):format(pkg, version))
-        return ctx.spawn[opts.bun_cmd] {
+        ctx.stdio_sink:stdout(("Installing npm package %s@%s via %s…\n"):format(pkg, version, opts.tool))
+        return ctx.spawn[opts.tool] {
             "add",
             ("%s@%s"):format(pkg, version),
             install_opts.extra_packages or vim.NIL,
@@ -53,15 +47,10 @@ function M.apply(npm_manager, opts)
         }
     end
 
-    -- Patch uninstall()
-    -- Original behavior: spawns `npm uninstall <pkg>`
-    -- Bun variant: spawns `bun remove <pkg>`
-    ---@async
-    ---@param pkg string
     npm_manager.uninstall = function(pkg)
         local ctx = installer.context()
-        ctx.stdio_sink:stdout(("Uninstalling npm package %s via bun…\n"):format(pkg))
-        return ctx.spawn[opts.bun_cmd] { "remove", pkg }
+        ctx.stdio_sink:stdout(("Uninstalling npm package %s via %s…\n"):format(pkg, opts.tool))
+        return ctx.spawn[opts.tool] { "remove", pkg }
     end
 
     return originals

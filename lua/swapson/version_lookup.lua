@@ -2,7 +2,7 @@ local M = {}
 
 ---@async
 ---@param npm_client table
----@param _opts { bun_cmd: string }
+---@param _opts { tool: string }
 ---@return { get_latest_version: fun(...), get_all_versions: fun(...) }
 function M.apply(npm_client, _opts)
     local fetch = require "mason-core.fetch"
@@ -15,26 +15,12 @@ function M.apply(npm_client, _opts)
         get_all_versions = npm_client.get_all_versions,
     }
 
-    -- Original: spawns `npm view --json <pkg>@latest`
-    -- Replacement: GET https://registry.npmjs.org/<pkg>/latest
-    -- The npm registry's /latest endpoint returns the same
-    -- {name, version, ...} shape as `npm view --json pkg@latest`.
     npm_client.get_latest_version = function(pkg)
         return fetch("https://registry.npmjs.org/" .. pkg .. "/latest")
             :map_catching(vim.json.decode)
             :map(_.pick { "name", "version" })
     end
 
-    -- Original: spawns `npm view --json <pkg> versions`
-    -- Replacement: GET https://registry.npmjs.org/<pkg>
-    -- then extract version keys and sort descending by semver.
-    --
-    -- The raw registry JSON's `versions` object has no guaranteed key
-    -- order, so we must sort explicitly. Unlike the old `npm view`
-    -- approach (which returned an array npm had already sorted), we
-    -- use mason-core.semver's comparator for correct numerical major/
-    -- minor/patch ordering, not lexicographic string comparison which
-    -- would put 10.0.0 before 2.0.0.
     npm_client.get_all_versions = function(pkg)
         return fetch("https://registry.npmjs.org/" .. pkg)
             :map_catching(vim.json.decode)
@@ -43,7 +29,7 @@ function M.apply(npm_client, _opts)
                 for v, _ in pairs(data.versions) do
                     local ok, sem = pcall(semver.new, v)
                     if not ok then
-                        log.fmt_debug("bunson: failed to parse semver for %q", v)
+                        log.fmt_debug("swapson: failed to parse semver for %q", v)
                     end
                     table.insert(entries, { str = v, sem = ok and sem or nil })
                 end

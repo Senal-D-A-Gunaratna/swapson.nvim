@@ -1,4 +1,4 @@
-# bunson.nvim
+# swapson.nvim
 
 ## Status
 
@@ -9,44 +9,56 @@ Tested end-to-end (install + LSP attach + cold-start survival) with
 [prettier](https://github.com/prettier/prettier) (formatter with native platform
 binary resolution), on Arch Linux. Has zero automated test coverage
 
-When `node` is not found on `$PATH`, bunson.nvim creates a shell wrapper at
+When `node` is not found on `$PATH`, swapson.nvim creates a shell wrapper at
 `<mason_install_root>/bin/node` that delegates to `bun`, so npm-published
 packages with `#!/usr/bin/env node` shebangs still resolve
 
 A companion plugin for [mason.nvim](https://github.com/mason-org/mason.nvim) that
-routes npm package installs through **bun** instead of **npm**
+routes package installs through faster alternative package managers instead of
+the defaults (npm, pip).
+
+## Supported swaps
+
+| mason manager | Default tool | Swapped tool |
+|---------------|-------------|-------------|
+| npm           | npm         | **bun**     |
+| pip (pypi)    | pip         | **uv**      |
 
 ## Why?
 
-`bun add` is significantly faster than `npm install` for installing npm packages
+`bun add` is significantly faster than `npm install` for installing npm packages.
 Since mason.nvim installs hundreds of LSP servers, linters, and formatters from
-npm, using bun cuts install time dramatically on a fresh setup
+npm, using bun cuts install time dramatically on a fresh setup.
 
-mason.nvim's maintainers have (reasonably) declined to add native bun support
-upstream, as it would introduce a dependency on an external toolchain with
-overlapping but not identical semantics to npm
+`uv pip install` is significantly faster than `pip install` for Python packages,
+and `uv venv` creates virtual environments much faster than `python -m venv`.
+
+mason.nvim's maintainers have (reasonably) declined to add native alternative
+toolchain support upstream, as it would introduce dependencies on external
+toolchains with overlapping but not identical semantics.
 
 ## How it works
 
-bunson.nvim **monkeypatches** mason.nvim's internal npm manager module
-(`mason-core.installer.managers.npm`) at runtime, replacing the `init`,
-`install`, and `uninstall` functions with bun equivalents
+swapson.nvim **monkeypatches** mason.nvim's internal manager modules at runtime,
+replacing the `init`, `install`, and `uninstall` functions with tool-specific
+alternatives.
 
 This is the same technique used by
 [mason-lspconfig.nvim](https://github.com/williamboman/mason-lspconfig.nvim)
 and
 [mason-tool-installer.nvim](https://github.com/WhoIsSethDaniel/mason-tool-installer.nvim)
-to extend mason.nvim without forking it
+to extend mason.nvim without forking it.
 
 The patches are applied to the module tables cached in `package.loaded`, which
-every mason.nvim internal that require the same module path shares. No files are
-modified
+every mason.nvim internal that requires the same module path shares. No files are
+modified.
 
 ## Requirements
 
 - Neovim >= 0.7.0
 - [mason.nvim](https://github.com/mason-org/mason.nvim)
-- `bun` installed and on `$PATH`
+- `bun` installed and on `$PATH` (for npm swaps)
+- `uv` installed and on `$PATH` (for pip swaps)
 - **Platform**: Linux (tested); macOS should work but is unverified; Windows is
   not currently supported (node shim is POSIX shell only)
 
@@ -54,66 +66,74 @@ modified
 
 ```lua
 {
-    "Senal-D-A-Gunaratna/bunson.nvim",
+    "Senal-D-A-Gunaratna/swapson.nvim",
     dependencies = {
         "mason-org/mason.nvim",
     },
     config = function()
-        require("bunson").setup()
+        require("swapson").setup()
     end,
 }
 ```
 
-The `dependencies` key ensures mason.nvim loads before bunson.nvim, which is
-required since bunson.nvim patches mason.nvim's already-loaded modules
+The `dependencies` key ensures mason.nvim loads before swapson.nvim, which is
+required since swapson.nvim patches mason.nvim's already-loaded modules.
 
 ## Configuration
 
-`require("bunson").setup(opts)` accepts an optional table:
+`require("swapson").setup(opts)` accepts an optional table:
 
 ```lua
-require("bunson").setup({
-    -- Whether to also patch mason's npm version-lookup client
-    -- (npm view --json) — needed on systems with NO npm installed at all,
-    -- since version lookups would otherwise still shell out to npm
-    patch_version_lookup = false, -- set true for non-npm systems
+require("swapson").setup({
+    npm = {
+        enabled = true,       -- set false to skip npm->bun patching
+        tool = "bun",          -- the bun binary name/path
 
-    -- The bun binary name/path. Change if bun is installed under a
-    -- different name or at a custom path
-    bun_cmd = "bun",
+        -- Whether to also patch mason's npm version-lookup client
+        -- (npm view --json) — needed on systems with NO npm installed at all,
+        -- since version lookups would otherwise still shell out to npm
+        patch_version_lookup = false,
+    },
+    pip = {
+        enabled = true,       -- set false to skip pip->uv patching
+        tool = "uv",           -- the uv binary name/path
+    },
 })
 ```
 
+Each manager falls back gracefully to mason's default behavior if its
+configured tool is not found on `$PATH`, with a `vim.notify()` warning.
+
 ## Health check
 
-Run `:checkhealth bunson` to diagnose your bunson.nvim setup:
+Run `:checkhealth swapson` to diagnose your swapson.nvim setup:
 
 - Checks that mason.nvim is installed and loadable
-- Verifies the `bun` binary is on `$PATH`
+- Verifies `bun` and `uv` binaries are on `$PATH`
+- Reports whether each manager is currently patched
 - Reports whether a real `node` is available or a bun-based node shim will be created
 - Inspects the node shim file for correct permissions
-- Reports whether the mason npm manager is currently patched
 - Shows whether `patch_version_lookup` is active (registry API vs. shelling out to npm)
 
 The health check is **read-only**: it never creates, modifies, or removes files.
 
 ## Reverting
 
-Call `require("bunson").restore()` to restore mason.nvim's original npm
-functions. Useful for A/B testing or if bun-based installs misbehave for a
-specific package
+Call `require("swapson").restore()` to restore all mason.nvim manager functions
+to their originals. Useful for A/B testing or if a swapped install misbehaves.
 
 ## Caveats
 
-bunson.nvim patches **private** Lua modules internal to mason.nvim
-(`mason-core.installer.managers.npm` and optionally
+swapson.nvim patches **private** Lua modules internal to mason.nvim
+(e.g. `mason-core.installer.managers.npm`,
+`mason-core.installer.managers.pypi`, and optionally
 `mason.providers.client.npm`). These modules are not part of mason.nvim's
 public API. Future mason.nvim releases may refactor or rename them without a
-semver-major bump, which could break bunson.nvim silently
+semver-major bump, which could break swapson.nvim silently.
 
-If bunson.nvim stops working after a mason.nvim update, check
+If swapson.nvim stops working after a mason.nvim update, check
 [mason.nvim's changelog](https://github.com/mason-org/mason.nvim/releases) for
-internal module changes and file an issue
+internal module changes and file an issue.
 
 ## Verified packages
 
@@ -129,7 +149,7 @@ attach, cold-start survival) on Arch Linux:
   optional dependencies correctly
 
 Packages with `node-gyp` native addons, npm-specific `postinstall` hooks, or
-deep scoped dependency trees remain unverified
+deep scoped dependency trees remain unverified.
 
 ## License
 

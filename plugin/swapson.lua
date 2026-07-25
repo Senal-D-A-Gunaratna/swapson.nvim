@@ -1,0 +1,8 @@
+-- swapson.nvim plugin bootstrap
+--
+-- This file exists so lazy.nvim recognizes swapson.nvim as a plugin that can be
+-- lazy-loaded. swapson.nvim does NOT auto-call setup() from this file; users
+-- must call require("swapson").setup() explicitly in their lazy.nvim config
+-- (or via a plugin spec's `config` key) to ensure mason.nvim is loaded first.
+--
+-- Refer to README.md for installation and usage instructions.

@@ -1,7 +1,38 @@
 local M = {}
 
+local function check_tool_config(state, name, settings_key)
+    local configured_opts = state.get_opts()
+    local manager_config = (configured_opts or {})[settings_key] or {}
+    local tool = manager_config.tool or (settings_key == "npm" and "bun") or "uv"
+    local enabled = manager_config.enabled ~= false
+
+    local key = settings_key
+    if not configured_opts then
+        vim.health.info(("%s: setup() has not been called — using default tool='%s', enabled=%s"):format(key, tool, enabled))
+    end
+
+    local tool_path = vim.fn.exepath(tool)
+    if tool_path and tool_path ~= "" then
+        vim.health.ok(("%s: %s found at %s"):format(key, tool, tool_path))
+    else
+        vim.health.error(("%s: tool '%s' not found on $PATH"):format(key, tool))
+    end
+
+    if enabled then
+        if state.has_originals(key) then
+            vim.health.ok(("%s: mason's %s manager is currently patched to use %s"):format(key, key, tool))
+        else
+            vim.health.info(
+                ("%s: not currently patched — call require('swapson').setup() in your config"):format(key)
+            )
+        end
+    else
+        vim.health.info(("%s: disabled in config — mason will use its default manager"):format(key))
+    end
+end
+
 function M.check()
-    vim.health.start "bunson.nvim"
+    vim.health.start "swapson.nvim"
 
     local ok_mason, _ = pcall(require, "mason")
     if ok_mason then
@@ -9,24 +40,17 @@ function M.check()
     else
         vim.health.error(
             "mason.nvim is not installed or cannot be loaded. "
-                .. "Add `dependencies = { 'mason-org/mason.nvim' }` to your bunson.nvim lazy.nvim spec."
+                .. "Add `dependencies = { 'mason-org/mason.nvim' }` to your swapson.nvim lazy.nvim spec."
         )
         return
     end
 
-    local state = require "bunson.state"
-    local configured_opts = state.get_opts()
-    local bun_cmd = (configured_opts or {}).bun_cmd or "bun"
-    if not configured_opts then
-        vim.health.info "setup() has not been called yet — using default bun_cmd='bun', not user config"
-    end
-    local bun_path = vim.fn.exepath(bun_cmd)
-    if bun_path and bun_path ~= "" then
-        vim.health.ok(("bun found at %s"):format(bun_path))
-    else
-        vim.health.error(("bun_cmd '%s' not found on $PATH"):format(bun_cmd))
-    end
+    local state = require "swapson.state"
 
+    check_tool_config(state, "npm", "npm")
+    check_tool_config(state, "pip", "pip")
+
+    -- Node shim status
     local node_found = vim.fn.executable "node" == 1
     if node_found then
         local node_exe = vim.fn.exepath "node"
@@ -35,7 +59,7 @@ function M.check()
                 .. " — node shim will not be created, npm-published packages run on real node."):format(node_exe)
         )
     else
-        vim.health.info "no system node found — bunson will create a node shim delegating to bun."
+        vim.health.info "no system node found — swapson will create a node shim delegating to bun."
     end
 
     if not node_found then
@@ -56,12 +80,7 @@ function M.check()
         end
     end
 
-    if state.is_patched() then
-        vim.health.ok "mason's npm manager is currently patched to use bun"
-    else
-        vim.health.warn "not currently patched — call require('bunson').setup() in your config"
-    end
-
+    -- Version lookup patch status
     if state.has_originals "version_lookup" then
         vim.health.ok "patch_version_lookup is enabled — version queries use npm registry API directly"
     else
