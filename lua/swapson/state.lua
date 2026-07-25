@@ -52,9 +52,12 @@ end
 
 --- Restore all mason.nvim manager patches to their original state.
 function M.restore()
-    for _, entry in pairs(patches) do
+    for name, entry in pairs(patches) do
         if entry.revert then
             entry.revert(entry.module, entry.originals)
+        else
+            local log = require "mason-core.log"
+            log.fmt_debug("swapson: no revert function registered for patch %q, skipping", name)
         end
     end
 
