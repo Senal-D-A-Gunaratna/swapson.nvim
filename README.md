@@ -20,9 +20,9 @@ the defaults (npm, pip).
 ## Supported swaps
 
 | mason manager | Default tool | Swapped tool |
-|---------------|-------------|-------------|
-| npm           | npm         | **bun**     |
-| pip (pypi)    | pip         | **uv**      |
+| ------------- | ------------ | ------------ |
+| npm           | npm          | **bun**      |
+| pip (pypi)    | pip          | **uv**       |
 
 ## Why?
 
@@ -71,13 +71,29 @@ modified.
         "mason-org/mason.nvim",
     },
     config = function()
-        require("swapson").setup()
+        require("swapson").setup({
+            npm = {
+                enabled = true,       -- set false to skip npm->bun patching
+                tool = "bun",         -- the bun binary name/path
+                -- Whether to also patch mason's npm version-lookup client
+                -- (npm view --json) — needed on systems with NO npm
+                -- installed at all, since version lookups would
+                -- otherwise still shell out to npm
+                patch_version_lookup = true,
+            },
+            pip = {
+                enabled = true,        -- set false to skip pip->uv patching
+                tool = "uv",           -- the uv binary name/path
+            },
+        })
     end,
 }
 ```
 
 The `dependencies` key ensures mason.nvim loads before swapson.nvim, which is
 required since swapson.nvim patches mason.nvim's already-loaded modules.
+
+Omitting any field falls back to the defaults inside `init.lua`.
 
 ## Configuration
 
@@ -92,7 +108,7 @@ require("swapson").setup({
         -- Whether to also patch mason's npm version-lookup client
         -- (npm view --json) — needed on systems with NO npm installed at all,
         -- since version lookups would otherwise still shell out to npm
-        patch_version_lookup = false,
+        patch_version_lookup = true,
     },
     pip = {
         enabled = true,       -- set false to skip pip->uv patching
