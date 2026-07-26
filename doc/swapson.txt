@@ -55,23 +55,23 @@ module path shares. No files are modified.
 The recommended shorthand is |opts = {...}|, since it's simpler when no extra
 logic beyond |setup()| is needed >
 
-    {
-        "Senal-D-A-Gunaratna/swapson.nvim",
-        dependencies = {
-            "mason-org/mason.nvim",
-        },
-        opts = {
-            npm = {
-                enabled = true,
-                tool = "bun",
-                patch_version_lookup = true,
-            },
-            pip = {
-                enabled = true,
-                tool = "uv",
-            },
-        },
-    }
+{
+  "Senal-D-A-Gunaratna/swapson.nvim",
+  dependencies = {
+      "mason-org/mason.nvim",
+  },
+  opts = {
+      npm = {
+          enabled = true,
+          tool = "bun",
+          patch_version_lookup = true,
+      },
+      pip = {
+          enabled = true,
+          tool = "uv",
+      },
+  },
+},
 
 The |opts| form is safe regardless of load order. swapson.nvim's |setup()|
 checks |require("mason").has_setup| before patching; if mason.nvim has not

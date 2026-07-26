@@ -52,8 +52,20 @@ function M.check()
 
     -- Node shim status
     local node_found = vim.fn.executable "node" == 1
+    local node_exe = node_found and vim.fn.exepath "node" or nil
+    local is_own_shim = false
     if node_found then
-        local node_exe = vim.fn.exepath "node"
+        local ok_read, f = pcall(io.open, node_exe, "r")
+        if ok_read and f then
+            local content = f:read "*a"
+            f:close()
+            is_own_shim = content ~= nil and content:find("# swapson.nvim node shim", 1, true) ~= nil
+        end
+    end
+
+    if node_found and is_own_shim then
+        vim.health.ok(("swapson node shim active at %s (delegating to bun)"):format(node_exe))
+    elseif node_found then
         vim.health.info(
             ("system node found at %s"
                 .. " — node shim will not be created, npm-published packages run on real node."):format(node_exe)

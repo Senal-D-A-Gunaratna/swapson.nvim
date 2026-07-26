@@ -36,7 +36,22 @@ function M.ensure(opts)
                     local tmp_path = node_shim .. ".tmp." .. vim.fn.getpid()
                     local ok, err = io.open(tmp_path, "w")
                     if ok then
-                        ok:write(("#!/bin/sh\n%s\nexec %s \"$@\"\n"):format(SHIM_MARKER, shell_quote(bun_path)))
+                        ok:write((
+                            "#!/bin/sh\n"
+                            .. "%s\n"
+                            -- `bun --version` prints bun's own version (e.g. "1.1.34"), not a Node-style
+                            -- "vX.Y.Z" string. Tools that shell out to `node --version` (Mason's health
+                            -- check among them) parse for the "v" prefix and crash on a nil match.
+                            -- `process.version` inside Bun's runtime IS reported in Node-compatible form,
+                            -- so special-case the version flags and evaluate it instead of forwarding to
+                            -- bun's own --version flag.
+                            .. "case \"$1\" in\n"
+                            .. "  --version|-v)\n"
+                            .. "    exec %s -e 'console.log(process.version)'\n"
+                            .. "    ;;\n"
+                            .. "esac\n"
+                            .. "exec %s \"$@\"\n"
+                        ):format(SHIM_MARKER, shell_quote(bun_path), shell_quote(bun_path)))
                         ok:close()
                         vim.fn.setfperm(tmp_path, "rwxr-xr-x")
                         local rename_ok, rename_err = os.rename(tmp_path, node_shim)
