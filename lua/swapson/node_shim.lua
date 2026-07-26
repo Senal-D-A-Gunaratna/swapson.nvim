@@ -2,6 +2,16 @@ local M = {}
 
 local SHIM_MARKER = "# swapson.nvim node shim"
 
+--- POSIX single-quote shell escaping.
+--- Wraps the string in single quotes and replaces embedded single quotes
+--- with the sequence close-quote / escaped-quote / reopen-quote ('\'').
+--- Safe for arbitrary strings (spaces, $, backticks, newlines, etc.).
+---@param s string
+---@return string
+local function shell_quote(s)
+    return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
 ---@param opts { npm: { tool: string } }
 function M.ensure(opts)
     local log = require "mason-core.log"
@@ -15,23 +25,43 @@ function M.ensure(opts)
                 local tool = (opts.npm or {}).tool or "bun"
                 local bun_path = vim.fn.exepath(tool)
                 if bun_path and bun_path ~= "" then
+                    if bun_path:find "\n" then
+                        log.warn(
+                            ("swapson: refused to create node shim: bun path %s contains a newline. "
+                                .. "LSPs relying on #!/usr/bin/env node will fail with exit 127."):format(bun_path)
+                        )
+                        return
+                    end
                     vim.fn.mkdir(mason_bin, "p")
-                    local ok, err = io.open(node_shim, "w")
+                    local tmp_path = node_shim .. ".tmp." .. vim.fn.getpid()
+                    local ok, err = io.open(tmp_path, "w")
                     if ok then
-                        ok:write(("#!/bin/sh\n%s\nexec %q \"$@\"\n"):format(SHIM_MARKER, bun_path))
+                        ok:write(("#!/bin/sh\n%s\nexec %s \"$@\"\n"):format(SHIM_MARKER, shell_quote(bun_path)))
                         ok:close()
-                        vim.fn.setfperm(node_shim, "rwxr-xr-x")
-                        if vim.fn.executable(node_shim) == 1 then
-                            log.fmt_debug("swapson: created node shim at %s -> %s", node_shim, bun_path)
+                        vim.fn.setfperm(tmp_path, "rwxr-xr-x")
+                        local rename_ok, rename_err = os.rename(tmp_path, node_shim)
+                        if rename_ok then
+                            if vim.fn.executable(node_shim) == 1 then
+                                log.fmt_debug("swapson: created node shim at %s -> %s", node_shim, bun_path)
+                            else
+                                log.warn(
+                                    ("swapson: wrote node shim to %s but it is not executable after chmod. "
+                                        .. "LSPs relying on #!/usr/bin/env node will fail with exit 127."):format(
+                                        node_shim
+                                    )
+                                )
+                            end
                         else
+                            pcall(os.remove, tmp_path)
                             log.warn(
-                                ("swapson: wrote node shim to %s but it is not executable after chmod. "
+                                ("swapson: failed to rename temp shim %s to %s: %s. "
                                     .. "LSPs relying on #!/usr/bin/env node will fail with exit 127."):format(
-                                    node_shim
+                                    tmp_path, node_shim, rename_err
                                 )
                             )
                         end
                     else
+                        pcall(os.remove, tmp_path)
                         log.warn(
                             ("swapson: failed to create node shim at %s: %s. "
                                 .. "LSPs relying on #!/usr/bin/env node will fail with exit 127."):format(
