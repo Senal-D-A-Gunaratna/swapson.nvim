@@ -16,6 +16,7 @@ function M.apply(pypi_manager, opts)
     local Result = require "mason-core.result"
     local installer = require "mason-core.installer"
     local log = require "mason-core.log"
+    local SystemPackage = require "mason-core.system-package"
 
     local originals = {
         init = pypi_manager.init,
@@ -40,18 +41,19 @@ function M.apply(pypi_manager, opts)
     -- Patch install()
     -- Original: `venv/bin/python -m pip --disable-pip-version-check install
     -- --no-user --ignore-installed -U [extra_args] <pkg>==<version> [extra_pkgs]`
-    -- uv variant: `uv pip install --directory venv -U [install_extra_args] <pkg>==<version> [extra_pkgs]`
-    -- Uses --directory <venv> for correct venv targeting instead of resolving
-    -- the venv python interpreter path.
+    -- uv variant: `uv pip install --python venv -U [install_extra_args] <pkg>==<version> [extra_pkgs]`
+    -- Uses --python <venv> for correct venv targeting instead of resolving
+    -- the venv python interpreter path. Note: --directory has no effect in uv pip's interface.
     pypi_manager.install = function(pkg, version, install_opts)
         install_opts = install_opts or {}
         log.fmt_debug("swapson: pypi install %s %s %s", pkg, version, install_opts)
         local ctx = installer.context()
+        ctx:require(SystemPackage.sfw)
         ctx.stdio_sink:stdout(("Installing pip package %s@%s via %s…\n"):format(pkg, version, opts.tool))
         return ctx.spawn[opts.tool] {
             "pip",
             "install",
-            "--directory",
+            "--python",
             "venv",
             "-U",
             install_opts.install_extra_args or vim.NIL,
@@ -63,12 +65,14 @@ function M.apply(pypi_manager, opts)
 
     -- Patch uninstall()
     -- Original: `venv/bin/python -m pip uninstall -y <pkg>`
-    -- uv variant: `uv pip uninstall --directory venv <pkg>`
+    -- uv variant: `uv pip uninstall --python venv <pkg>`
+    -- Note: --directory has no effect in uv pip's interface; --python correctly
+    -- targets the venv directory.
     pypi_manager.uninstall = function(pkg)
         log.fmt_debug("swapson: pypi uninstall %s", pkg)
         local ctx = installer.context()
         ctx.stdio_sink:stdout(("Uninstalling pip package %s via %s…\n"):format(pkg, opts.tool))
-        return ctx.spawn[opts.tool] { "pip", "uninstall", "--directory", "venv", pkg }
+        return ctx.spawn[opts.tool] { "pip", "uninstall", "--python", "venv", pkg }
     end
 
     return originals
