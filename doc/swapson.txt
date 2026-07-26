@@ -52,8 +52,8 @@ module path shares. No files are modified.
 ==============================================================================
 3. INSTALLATION                                    *swapson-installation*
 
-The recommended shorthand for most users is |opts = {...}| (simpler when no
-extra logic beyond |setup()| is needed) >
+The recommended shorthand is |opts = {...}|, since it's simpler when no extra
+logic beyond |setup()| is needed >
 
     {
         "Senal-D-A-Gunaratna/swapson.nvim",
@@ -73,29 +73,7 @@ extra logic beyond |setup()| is needed) >
         },
     }
 
-The explicit |config = function()| form also works identically >
-
-    {
-        "Senal-D-A-Gunaratna/swapson.nvim",
-        dependencies = {
-            "mason-org/mason.nvim",
-        },
-        config = function()
-            require("swapson").setup({
-                npm = {
-                    enabled = true,
-                    tool = "bun",
-                    patch_version_lookup = true,
-                },
-                pip = {
-                    enabled = true,
-                    tool = "uv",
-                },
-            })
-        end,
-    }
-
-Both styles are safe regardless of load order. swapson.nvim's |setup()|
+The |opts| form is safe regardless of load order. swapson.nvim's |setup()|
 checks |require("mason").has_setup| before patching; if mason.nvim has not
 completed its own setup yet, patching is deferred via |vim.schedule()| and
 retried once. This ensures patches are only applied against a fully

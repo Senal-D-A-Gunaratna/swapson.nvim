@@ -64,8 +64,7 @@ modified.
 
 ## Installation (lazy.nvim)
 
-swapson.nvim supports two equivalent configuration styles. The recommended
-shorthand for most users is `opts = {...}`, since it's simpler when no extra
+The recommended shorthand is `opts = {...}`, since it's simpler when no extra
 logic beyond setup() is needed:
 
 ```lua
@@ -88,42 +87,12 @@ logic beyond setup() is needed:
 }
 ```
 
-The explicit `config = function()` form is also fully supported and works
-identically — useful if you need to interleave other logic with setup():
-
-```lua
-{
-    "Senal-D-A-Gunaratna/swapson.nvim",
-    dependencies = {
-        "mason-org/mason.nvim",
-    },
-    config = function()
-        require("swapson").setup({
-            npm = {
-                enabled = true,       -- set false to skip npm->bun patching
-                tool = "bun",         -- the bun binary name/path
-                -- Whether to also patch mason's npm version-lookup client
-                -- (npm view --json) — needed on systems with NO npm
-                -- installed at all, since version lookups would
-                -- otherwise still shell out to npm
-                patch_version_lookup = true,
-            },
-            pip = {
-                enabled = true,        -- set false to skip pip->uv patching
-                tool = "uv",           -- the uv binary name/path
-            },
-        })
-    end,
-}
-```
-
-Both styles are safe to use regardless of load order. swapson.nvim's setup()
-includes a load-order safety guard: it checks
+The `opts` form is safe to use regardless of load order. swapson.nvim's
+setup() includes a load-order safety guard: it checks
 `require("mason").has_setup` before applying any patches. If mason.nvim has not
 completed its own setup yet, swapson defers patching via `vim.schedule()` and
 retries once. This ensures patches are only applied against a fully initialized
-mason.nvim state, even when lazy.nvim's `opts` auto-setup mechanism runs before
-mason's own config.
+mason.nvim state.
 
 The `dependencies` key ensures mason.nvim loads before swapson.nvim, which is
 required since swapson.nvim patches mason.nvim's already-loaded modules.
