@@ -1,8 +1,11 @@
 -- swapson.nvim plugin bootstrap
 --
--- This file exists so lazy.nvim recognizes swapson.nvim as a plugin that can be
--- lazy-loaded. swapson.nvim does NOT auto-call setup() from this file; users
--- must call require("swapson").setup() explicitly in their lazy.nvim config
--- (or via a plugin spec's `config` key) to ensure mason.nvim is loaded first.
+-- lazy.nvim recognizes swapson.nvim as a plugin via this file. The `opts = {...}`
+-- shorthand is now a fully supported, safe configuration method:
+-- setup() is called automatically by lazy.nvim with your opts table, and the
+-- built-in mason-ready guard ensures patching only proceeds once mason.nvim has
+-- completed its own setup (require("mason").has_setup == true). If mason is not
+-- ready yet, patching is deferred via vim.schedule and retried once.
 --
--- Refer to README.md for installation and usage instructions.
+-- The explicit config = function() ... end form continues to work identically.
+-- See README.md for both installation styles.

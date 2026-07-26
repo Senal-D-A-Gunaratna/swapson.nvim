@@ -52,7 +52,28 @@ module path shares. No files are modified.
 ==============================================================================
 3. INSTALLATION                                    *swapson-installation*
 
-lazy.nvim >
+The recommended shorthand for most users is |opts = {...}| (simpler when no
+extra logic beyond |setup()| is needed) >
+
+    {
+        "Senal-D-A-Gunaratna/swapson.nvim",
+        dependencies = {
+            "mason-org/mason.nvim",
+        },
+        opts = {
+            npm = {
+                enabled = true,
+                tool = "bun",
+                patch_version_lookup = true,
+            },
+            pip = {
+                enabled = true,
+                tool = "uv",
+            },
+        },
+    }
+
+The explicit |config = function()| form also works identically >
 
     {
         "Senal-D-A-Gunaratna/swapson.nvim",
@@ -73,6 +94,12 @@ lazy.nvim >
             })
         end,
     }
+
+Both styles are safe regardless of load order. swapson.nvim's |setup()|
+checks |require("mason").has_setup| before patching; if mason.nvim has not
+completed its own setup yet, patching is deferred via |vim.schedule()| and
+retried once. This ensures patches are only applied against a fully
+initialized mason.nvim state.
 
 The |dependencies| key ensures mason.nvim loads before swapson.nvim, which is
 required since swapson.nvim patches mason.nvim's already-loaded modules.

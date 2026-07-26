@@ -5,28 +5,8 @@ local defaults = {
     pip = { enabled = true, tool = "uv" },
 }
 
---- Restore all mason.nvim manager modules to their original (unpatched) state.
-function M.restore()
-    require("swapson.state").restore()
-end
-
----@param opts? { npm?: { enabled?: boolean, tool?: string, patch_version_lookup?: boolean }, pip?: { enabled?: boolean, tool?: string } }
-function M.setup(opts)
-    opts = vim.tbl_deep_extend("keep", opts or {}, defaults)
-
-    local ok, _ = pcall(require, "mason")
-    if not ok then
-        vim.notify(
-            "swapson.nvim: mason.nvim is not installed or cannot be loaded. "
-                .. "Add `dependencies = { 'mason-org/mason.nvim' }` to your swapson.nvim lazy.nvim spec.",
-            vim.log.levels.ERROR
-        )
-        return
-    end
-
+local function _apply_patches(opts)
     local state = require "swapson.state"
-    state.set_opts(opts)
-
     if state.is_patched() then
         return
     end
@@ -64,7 +44,6 @@ function M.setup(opts)
         end
     end
 
-    -- npm-specific: optional version lookup patch
     local npm_config = opts.npm
     if npm_config and npm_config.enabled and npm_config.patch_version_lookup then
         local ok_client, npm_client = pcall(require, "mason.providers.client.npm")
@@ -92,6 +71,56 @@ function M.setup(opts)
     require("swapson.node_shim").ensure(opts)
 
     state.mark_patched()
+end
+
+--- Restore all mason.nvim manager modules to their original (unpatched) state.
+function M.restore()
+    require("swapson.state").restore()
+end
+
+---@param opts? { npm?: { enabled?: boolean, tool?: string, patch_version_lookup?: boolean }, pip?: { enabled?: boolean, tool?: string } }
+function M.setup(opts)
+    opts = vim.tbl_deep_extend("keep", opts or {}, defaults)
+
+    local ok, mason = pcall(require, "mason")
+    if not ok then
+        vim.notify(
+            "swapson.nvim: mason.nvim is not installed or cannot be loaded. "
+                .. "Add `dependencies = { 'mason-org/mason.nvim' }` to your swapson.nvim lazy.nvim spec.",
+            vim.log.levels.ERROR
+        )
+        return
+    end
+
+    local state = require "swapson.state"
+    state.set_opts(opts)
+
+    if state.is_patched() then
+        return
+    end
+
+    if mason.has_setup then
+        _apply_patches(opts)
+    else
+        vim.notify(
+            "swapson.nvim: mason.nvim has not completed its own setup yet. "
+                .. "Deferring swapson patch application until the next event loop tick.",
+            vim.log.levels.WARN
+        )
+        vim.schedule(function()
+            local mason_retry = require "mason"
+            if mason_retry.has_setup then
+                _apply_patches(opts)
+            else
+                vim.notify(
+                    "swapson.nvim: mason.nvim setup did not complete before the deferred retry. "
+                        .. "Applying patches anyway — install_root_dir and other settings will use mason defaults.",
+                    vim.log.levels.WARN
+                )
+                _apply_patches(opts)
+            end
+        end)
+    end
 end
 
 return M

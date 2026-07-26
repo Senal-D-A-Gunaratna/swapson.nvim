@@ -64,6 +64,33 @@ modified.
 
 ## Installation (lazy.nvim)
 
+swapson.nvim supports two equivalent configuration styles. The recommended
+shorthand for most users is `opts = {...}`, since it's simpler when no extra
+logic beyond setup() is needed:
+
+```lua
+{
+    "Senal-D-A-Gunaratna/swapson.nvim",
+    dependencies = {
+        "mason-org/mason.nvim",
+    },
+    opts = {
+        npm = {
+            enabled = true,
+            tool = "bun",
+            patch_version_lookup = true,
+        },
+        pip = {
+            enabled = true,
+            tool = "uv",
+        },
+    },
+}
+```
+
+The explicit `config = function()` form is also fully supported and works
+identically — useful if you need to interleave other logic with setup():
+
 ```lua
 {
     "Senal-D-A-Gunaratna/swapson.nvim",
@@ -89,6 +116,14 @@ modified.
     end,
 }
 ```
+
+Both styles are safe to use regardless of load order. swapson.nvim's setup()
+includes a load-order safety guard: it checks
+`require("mason").has_setup` before applying any patches. If mason.nvim has not
+completed its own setup yet, swapson defers patching via `vim.schedule()` and
+retries once. This ensures patches are only applied against a fully initialized
+mason.nvim state, even when lazy.nvim's `opts` auto-setup mechanism runs before
+mason's own config.
 
 The `dependencies` key ensures mason.nvim loads before swapson.nvim, which is
 required since swapson.nvim patches mason.nvim's already-loaded modules.
