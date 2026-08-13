@@ -1,18 +1,5 @@
 # swapson.nvim
 
-## Status
-
-**⚠️ This plugin is currently in beta**
-
-Tested end-to-end (install + LSP attach + cold-start survival) with
-[cspell-lsp](https://github.com/streetsidesoftware/cspell) (LSP server) and
-[prettier](https://github.com/prettier/prettier) (formatter with native platform
-binary resolution), on Arch Linux. Has zero automated test coverage
-
-When `node` is not found on `$PATH`, swapson.nvim creates a shell wrapper at
-`<mason_install_root>/bin/node` that delegates to `bun`, so npm-published
-packages with `#!/usr/bin/env node` shebangs still resolve
-
 A companion plugin for [mason.nvim](https://github.com/mason-org/mason.nvim) that
 routes package installs through faster alternative package managers instead of
 the defaults (npm, pip).
@@ -52,6 +39,10 @@ to extend mason.nvim without forking it.
 The patches are applied to the module tables cached in `package.loaded`, which
 every mason.nvim internal that requires the same module path shares. No files are
 modified.
+
+> **Note**: When `node` is not found on `$PATH`, swapson.nvim creates a shell wrapper at
+> `<mason_install_root>/bin/node` that delegates to `bun`, so npm-published
+> packages with `#!/usr/bin/env node` shebangs still resolve
 
 ## Requirements
 
