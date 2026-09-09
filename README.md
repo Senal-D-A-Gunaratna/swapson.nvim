@@ -60,7 +60,7 @@ modified
 > "LSPs and formatters just work" and "nothing installed via npm runs at all"
 > on a machine with no Node.js installed. The shim only appears when `node` is
 > genuinely missing; if `node` is on `$PATH`, installed packages keep running
-> through it as normal.
+> through it as normal
 
 ## Requirements
 
@@ -69,7 +69,7 @@ modified
 - `bun` installed and on `$PATH` (for npm swaps)
 - `uv` installed and on `$PATH` (for pip swaps)
 - **Platform**: Linux (tested); macOS should work but is unverified; Windows is
-  not currently supported (node shim is POSIX shell only)
+  not supported (node shim is POSIX shell only)
 
 ## Installation (lazy.nvim)
 
@@ -99,12 +99,13 @@ logic beyond setup() is needed:
 - `dependencies` isn't a swapson option — it's a lazy.nvim spec field that
   guarantees mason.nvim loads before swapson.nvim, which is required since
   swapson patches mason's already-loaded internal modules
-- `patch_version_lookup` defaults to `false`. When `true`, it additionally
-  replaces mason's version-lookup calls (`get_latest_version`/`get_all_versions`,
-  which normally shell out to `npm view --json`) with direct HTTPS requests to
-  `registry.npmjs.org`. This matters specifically if you have **no npm
-  installed at all** — without it, version lookups would still shell out to
-  npm even with the install/uninstall patch active
+- `patch_version_lookup` defaults to `true`. It replaces mason's version-lookup
+  calls (`get_latest_version`/`get_all_versions`, which normally shell out to
+  `npm view --json`) with direct HTTPS requests to `registry.npmjs.org`. This
+  matters specifically if you have **no npm installed at all** — without it,
+  version lookups would still shell out to npm even with the install/uninstall
+  patch active. Set it to `false` if you want version lookups to keep using
+  npm's own CLI
 
 The `opts` form is safe to use regardless of load order. swapson.nvim's
 setup() includes a load-order safety guard: it checks
@@ -127,9 +128,9 @@ require("swapson").setup({
 
         -- Whether to also patch mason's npm version-lookup client
         -- (npm view --json) — needed on systems with NO npm installed at all,
-        -- since version lookups would otherwise still shell out to npm.
-        -- Default: true
-        patch_version_lookup = true,
+        -- since version lookups would otherwise still shell out to npm
+        -- Default: false
+        patch_version_lookup = false,
     },
     pip = {
         enabled = true,       -- set false to skip pip->uv patching
