@@ -12,93 +12,97 @@ local function shell_quote(s)
 	return "'" .. s:gsub("'", "'\\''") .. "'"
 end
 
+--- Installs a bun-backed node shim so npm-published packages that shell out
+--- via `#!/usr/bin/env node` resolve to bun instead of a real node runtime.
+--- This runs whenever the npm manager is enabled (see init.lua) — swapping
+--- bun in for install *and* execution, not just install — regardless of
+--- whether a system node is also present.
 ---@param opts { npm: { tool: string } }
 function M.ensure(opts)
 	local log = require("mason-core.log")
 
-	if vim.fn.executable("node") == 0 then
-		local ok_settings, mason_settings = pcall(require, "mason.settings")
-		if ok_settings then
-			local mason_bin = mason_settings.current.install_root_dir .. "/bin"
-			local node_shim = mason_bin .. "/node"
-			if vim.fn.executable(node_shim) == 0 then
-				local tool = (opts.npm or {}).tool or "bun"
-				local bun_path = vim.fn.exepath(tool)
-				if bun_path and bun_path ~= "" then
-					if bun_path:find("\n") then
-						log.warn(
-							(
-								"swapson: refused to create node shim: bun path %s contains a newline. "
-								.. "LSPs relying on #!/usr/bin/env node will fail with exit 127."
-							):format(bun_path)
-						)
-						return
-					end
-					vim.fn.mkdir(mason_bin, "p")
-					local tmp_path = node_shim .. ".tmp." .. vim.fn.getpid()
-					local ok, err = io.open(tmp_path, "w")
-					if ok then
-						ok:write(
-							(
-								"#!/bin/sh\n"
-								.. "%s\n"
-								-- `bun --version` prints bun's own version (e.g. "1.1.34"), not a Node-style
-								-- "vX.Y.Z" string. Tools that shell out to `node --version` (Mason's health
-								-- check among them) parse for the "v" prefix and crash on a nil match.
-								-- `process.version` inside Bun's runtime IS reported in Node-compatible form,
-								-- so special-case the version flags and evaluate it instead of forwarding to
-								-- bun's own --version flag.
-								.. 'case "$1" in\n'
-								.. "  --version|-v)\n"
-								.. "    exec %s -e 'console.log(process.version)'\n"
-								.. "    ;;\n"
-								.. "esac\n"
-								.. 'exec %s "$@"\n'
-							):format(
-								SHIM_MARKER,
-								shell_quote(bun_path),
-								shell_quote(bun_path)
-							)
-						)
-						ok:close()
-						vim.fn.setfperm(tmp_path, "rwxr-xr-x")
-						local rename_ok, rename_err = os.rename(tmp_path, node_shim)
-						if rename_ok then
-							if vim.fn.executable(node_shim) == 1 then
-								log.fmt_debug(
-									"swapson: created node shim at %s -> %s",
-									node_shim,
-									bun_path
-								)
-							else
-								log.warn(
-									(
-										"swapson: wrote node shim to %s but it is not executable after chmod. "
-										.. "LSPs relying on #!/usr/bin/env node will fail with exit 127."
-									):format(node_shim)
-								)
-							end
-						else
-							pcall(os.remove, tmp_path)
-							log.warn(
-								(
-									"swapson: failed to rename temp shim %s to %s: %s. "
-									.. "LSPs relying on #!/usr/bin/env node will fail with exit 127."
-								):format(tmp_path, node_shim, rename_err)
-							)
-						end
-					else
-						pcall(os.remove, tmp_path)
-						log.warn(
-							(
-								"swapson: failed to create node shim at %s: %s. "
-								.. "LSPs relying on #!/usr/bin/env node will fail with exit 127."
-							):format(node_shim, err)
-						)
-					end
-				end
-			end
-		end
+	local ok_settings, mason_settings = pcall(require, "mason.settings")
+	if not ok_settings then
+		return
+	end
+
+	local mason_bin = mason_settings.current.install_root_dir .. "/bin"
+	local node_shim = mason_bin .. "/node"
+	if vim.fn.executable(node_shim) == 1 then
+		return
+	end
+
+	local tool = (opts.npm or {}).tool or "bun"
+	local bun_path = vim.fn.exepath(tool)
+	if not bun_path or bun_path == "" then
+		return
+	end
+
+	if bun_path:find("\n") then
+		log.warn(
+			(
+				"swapson: refused to create node shim: bun path %s contains a newline. "
+				.. "LSPs relying on #!/usr/bin/env node will fail with exit 127."
+			):format(bun_path)
+		)
+		return
+	end
+
+	vim.fn.mkdir(mason_bin, "p")
+	local tmp_path = node_shim .. ".tmp." .. vim.fn.getpid()
+	local ok, err = io.open(tmp_path, "w")
+	if not ok then
+		pcall(os.remove, tmp_path)
+		log.warn(
+			(
+				"swapson: failed to create node shim at %s: %s. "
+				.. "LSPs relying on #!/usr/bin/env node will fail with exit 127."
+			):format(node_shim, err)
+		)
+		return
+	end
+
+	ok:write(
+		(
+			"#!/bin/sh\n"
+			.. "%s\n"
+			-- `bun --version` prints bun's own version (e.g. "1.1.34"), not a Node-style
+			-- "vX.Y.Z" string. Tools that shell out to `node --version` (Mason's health
+			-- check among them) parse for the "v" prefix and crash on a nil match.
+			-- `process.version` inside Bun's runtime IS reported in Node-compatible form,
+			-- so special-case the version flags and evaluate it instead of forwarding to
+			-- bun's own --version flag.
+			.. 'case "$1" in\n'
+			.. "  --version|-v)\n"
+			.. "    exec %s -e 'console.log(process.version)'\n"
+			.. "    ;;\n"
+			.. "esac\n"
+			.. 'exec %s "$@"\n'
+		):format(SHIM_MARKER, shell_quote(bun_path), shell_quote(bun_path))
+	)
+	ok:close()
+	vim.fn.setfperm(tmp_path, "rwxr-xr-x")
+	local rename_ok, rename_err = os.rename(tmp_path, node_shim)
+	if not rename_ok then
+		pcall(os.remove, tmp_path)
+		log.warn(
+			(
+				"swapson: failed to rename temp shim %s to %s: %s. "
+				.. "LSPs relying on #!/usr/bin/env node will fail with exit 127."
+			):format(tmp_path, node_shim, rename_err)
+		)
+		return
+	end
+
+	if vim.fn.executable(node_shim) == 1 then
+		log.fmt_debug("swapson: created node shim at %s -> %s", node_shim, bun_path)
+	else
+		log.warn(
+			(
+				"swapson: wrote node shim to %s but it is not executable after chmod. "
+				.. "LSPs relying on #!/usr/bin/env node will fail with exit 127."
+			):format(node_shim)
+		)
 	end
 end
 

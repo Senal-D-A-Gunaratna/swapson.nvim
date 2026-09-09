@@ -84,12 +84,12 @@ logic beyond setup() is needed:
   },
   opts = {
       npm = {
-          enabled = true,           -- turn the npm -> bun patch on/off (also covers version lookups and the node shim)
-          tool = "bun",             -- binary name/path swapson calls instead of npm
+          enabled = true,  -- turn the npm -> bun patch on/off
+          tool = "bun",    -- binary name/path swapson calls instead of npm
       },
       pip = {
-          enabled = true,           -- turn the pip -> uv patch on/off
-          tool = "uv",              -- binary name/path swapson calls instead of pip
+          enabled = true,  -- turn the pip -> uv patch on/off
+          tool = "uv",     -- binary name/path swapson calls instead of pip
       },
   },
 },
