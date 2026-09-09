@@ -1,7 +1,7 @@
 local M = {}
 
 local defaults = {
-	npm = { enabled = true, tool = "bun", patch_version_lookup = false },
+	npm = { enabled = true, tool = "bun", patch_version_lookup = true },
 	pip = { enabled = true, tool = "uv" },
 }
 
@@ -63,14 +63,11 @@ local function _apply_patches(opts)
 			else
 				local version_originals =
 					version_lookup.apply(npm_client, { tool = npm_config.tool })
-				state.set_originals(
-					"version_lookup",
-					{
-						module = npm_client,
-						originals = version_originals,
-						revert = version_lookup.revert,
-					}
-				)
+				state.set_originals("version_lookup", {
+					module = npm_client,
+					originals = version_originals,
+					revert = version_lookup.revert,
+				})
 			end
 		else
 			vim.notify(
