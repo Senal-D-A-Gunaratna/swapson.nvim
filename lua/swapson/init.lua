@@ -1,7 +1,7 @@
 local M = {}
 
 local defaults = {
-	npm = { enabled = true, tool = "bun", patch_version_lookup = true },
+	npm = { enabled = true, tool = "bun" },
 	pip = { enabled = true, tool = "uv" },
 }
 
@@ -50,14 +50,13 @@ local function _apply_patches(opts)
 	end
 
 	local npm_config = opts.npm
-	if npm_config and npm_config.enabled and npm_config.patch_version_lookup then
+	if npm_config and npm_config.enabled then
 		local ok_client, npm_client = pcall(require, "mason.providers.client.npm")
 		if ok_client and type(npm_client) == "table" then
 			local ok_vl, version_lookup = pcall(require, "swapson.version_lookup")
 			if not ok_vl then
 				vim.notify(
-					"swapson.nvim: patch_version_lookup=true but swapson.version_lookup not found. "
-						.. "Skipping version lookup patch.",
+					"swapson.nvim: swapson.version_lookup not found. Skipping version lookup patch.",
 					vim.log.levels.WARN
 				)
 			else
@@ -71,14 +70,19 @@ local function _apply_patches(opts)
 			end
 		else
 			vim.notify(
-				"swapson.nvim: patch_version_lookup=true but mason.providers.client.npm not found. "
+				"swapson.nvim: mason.providers.client.npm not found. "
 					.. "This private internal module may have moved; skipping version lookup patch.",
 				vim.log.levels.WARN
 			)
 		end
 	end
 
-	require("swapson.node_shim").ensure(opts)
+	-- The node shim is part of the npm swap, not a separate feature: it's
+	-- gated on npm.enabled (same toggle as install/uninstall), not a
+	-- dedicated opt.
+	if npm_config and npm_config.enabled then
+		require("swapson.node_shim").ensure(opts)
+	end
 
 	state.mark_patched()
 end
@@ -88,7 +92,7 @@ function M.restore()
 	require("swapson.state").restore()
 end
 
----@param opts? { npm?: { enabled?: boolean, tool?: string, patch_version_lookup?: boolean }, pip?: { enabled?: boolean, tool?: string } }
+---@param opts? { npm?: { enabled?: boolean, tool?: string }, pip?: { enabled?: boolean, tool?: string } }
 function M.setup(opts)
 	opts = vim.tbl_deep_extend("keep", opts or {}, defaults)
 

@@ -63,40 +63,33 @@ function M.check()
 	check_tool_config(state, "pip")
 
 	-- Node shim status
-	local node_found = vim.fn.executable("node") == 1
-	local node_exe = node_found and vim.fn.exepath("node") or nil
-	local is_own_shim = false
-	if node_found then
-		local ok_read, f = pcall(io.open, node_exe, "r")
-		if ok_read and f then
-			local content = f:read("*a")
-			f:close()
-			is_own_shim = content ~= nil
-				and content:find("# swapson.nvim node shim", 1, true) ~= nil
-		end
-	end
+	-- The shim now installs whenever npm patching is enabled, regardless of
+	-- whether a real system `node` is on $PATH — it always backs npm-installed
+	-- package execution with bun now, not just as a no-node fallback.
+	local configured_opts = state.get_opts()
+	local npm_enabled = ((configured_opts or {}).npm or {}).enabled ~= false
 
-	if node_found and is_own_shim then
-		vim.health.ok(("swapson node shim active at %s (delegating to bun)"):format(node_exe))
-	elseif node_found then
+	local system_node_path = vim.fn.exepath("node")
+	if system_node_path and system_node_path ~= "" then
 		vim.health.info(
-			(
-				"system node found at %s"
-				.. " — node shim will not be created, npm-published packages run on real node."
-			):format(node_exe)
+			("system node also found at %s (not used by swapson)"):format(system_node_path)
 		)
 	else
-		vim.health.info("no system node found — swapson will create a node shim delegating to bun.")
+		vim.health.info("no system node found on $PATH")
 	end
 
-	if not node_found then
+	if not npm_enabled then
+		vim.health.info("npm patching disabled — node shim will not be created")
+	else
 		local ok_settings, mason_settings = pcall(require, "mason.settings")
 		if ok_settings then
 			local node_shim = mason_settings.current.install_root_dir .. "/bin/node"
 			if vim.fn.filereadable(node_shim) == 0 then
-				vim.health.info("shim not yet created (created on first setup() call if node stays absent)")
+				vim.health.info("node shim not yet created (created on next setup() call)")
 			elseif vim.fn.executable(node_shim) == 1 then
-				vim.health.ok(("node shim active at %s"):format(node_shim))
+				vim.health.ok(
+					("swapson node shim active at %s (delegating to bun)"):format(node_shim)
+				)
 			else
 				vim.health.error(
 					(
@@ -111,7 +104,7 @@ function M.check()
 
 	-- Version lookup patch status
 	if state.has_originals("version_lookup") then
-		vim.health.ok("patch_version_lookup is enabled — version queries use npm registry API directly")
+		vim.health.ok("version lookup patched — version queries use npm registry API directly")
 	else
 		vim.health.info('"npm view" lookups still shell out to real npm')
 	end

@@ -13,13 +13,17 @@ the defaults (npm, pip)
 
 ## Why?
 
-Each manager (npm, pip) is designed to fully override its legacy tool — not
-partially speed it up — controlled by a single `enabled` toggle in your plugin
-opts/config. When `npm.enabled = true`, mason's npm calls go through bun
-entirely, not npm. Same for pip/uv. The only time the legacy tool runs instead
-is the automatic fallback: if the configured tool isn't found on `$PATH`,
-swapson notifies you and lets mason fall back to its default — that's a safety
-net, not the intended mode of operation.
+Each manager (npm, pip) is designed to fully override its legacy tool —
+controlled by a single `enabled` toggle in your plugin opts/config. When
+`npm.enabled = true`, mason's npm install/uninstall calls go through bun
+entirely, and npm-installed packages also run on bun via the node shim (see
+below) rather than a system node runtime. Same idea for pip/uv, though pip's
+swap is install-time only — Python packages still run on the venv's own
+interpreter, since there's no equivalent "python shim" concept here. The only
+time the legacy tool runs instead is the automatic fallback: if the
+configured tool isn't found on `$PATH`, swapson notifies you and lets mason
+fall back to its default — that's a safety net, not the intended mode of
+operation.
 
 `bun add` is significantly faster than `npm install` for installing npm packages.
 Since mason.nvim installs hundreds of LSP servers, linters, and formatters from
@@ -27,10 +31,6 @@ npm, using bun cuts install time dramatically on a fresh setup
 
 `uv pip install` is significantly faster than `pip install` for Python packages,
 and `uv venv` creates virtual environments much faster than `python -m venv`
-
-Note that this speeds up _installing_ packages — it does not make already-installed
-npm packages run faster. Once a package is installed, it still executes via
-whatever runtime it normally uses (typically `node`)
 
 mason.nvim's maintainers have (reasonably) declined to add native alternative
 toolchain support upstream, as it would introduce dependencies on external
@@ -52,15 +52,15 @@ The patches are applied to the module tables cached in `package.loaded`, which
 every mason.nvim internal that requires the same module path shares. No files are
 modified
 
-> **Note — the node shim**: If `node` is not found on `$PATH` (but `bun` is),
-> swapson.nvim creates a shell wrapper at `<mason_install_root>/bin/node` that
-> delegates to `bun`, so npm-published packages with `#!/usr/bin/env node`
-> shebangs still resolve instead of failing with exit 127. This is a
-> compatibility fallback, not a speed feature — but it's the difference between
-> "LSPs and formatters just work" and "nothing installed via npm runs at all"
-> on a machine with no Node.js installed. The shim only appears when `node` is
-> genuinely missing; if `node` is on `$PATH`, installed packages keep running
-> through it as normal
+> **Note — the node shim**: When npm patching is enabled, swapson.nvim creates
+> a shell wrapper at `<mason_install_root>/bin/node` that delegates to `bun`,
+> so npm-published packages with `#!/usr/bin/env node` shebangs run on bun
+> instead of a real node runtime. This installs regardless of whether a
+> system `node` is also present — the swap now covers execution as well as
+> install, not just install. It's gated on `npm.enabled` (the same toggle
+> that controls the install/uninstall patch), not on a separate opt: set
+> `npm.enabled = false` if you want npm-sourced packages to install _and_
+> run on stock npm/node.
 
 ## Requirements
 
@@ -84,9 +84,8 @@ logic beyond setup() is needed:
   },
   opts = {
       npm = {
-          enabled = true,           -- turn the npm -> bun patch on/off
+          enabled = true,           -- turn the npm -> bun patch on/off (also covers version lookups and the node shim)
           tool = "bun",             -- binary name/path swapson calls instead of npm
-          patch_version_lookup = true, -- see note below (default is false)
       },
       pip = {
           enabled = true,           -- turn the pip -> uv patch on/off
@@ -99,13 +98,13 @@ logic beyond setup() is needed:
 - `dependencies` isn't a swapson option — it's a lazy.nvim spec field that
   guarantees mason.nvim loads before swapson.nvim, which is required since
   swapson patches mason's already-loaded internal modules
-- `patch_version_lookup` defaults to `true`. It replaces mason's version-lookup
-  calls (`get_latest_version`/`get_all_versions`, which normally shell out to
-  `npm view --json`) with direct HTTPS requests to `registry.npmjs.org`. This
-  matters specifically if you have **no npm installed at all** — without it,
-  version lookups would still shell out to npm even with the install/uninstall
-  patch active. Set it to `false` if you want version lookups to keep using
-  npm's own CLI
+- `npm.enabled` now controls the whole npm swap as one unit: install/uninstall,
+  version lookups (`get_latest_version`/`get_all_versions`, which normally
+  shell out to `npm view --json`, are replaced with direct HTTPS requests to
+  `registry.npmjs.org`), and the node shim. There's no separate toggle for any
+  of these — this matters specifically if you have **no npm installed at
+  all**, since without the version-lookup swap, lookups would still shell out
+  to npm even with everything else patched
 
 The `opts` form is safe to use regardless of load order. swapson.nvim's
 setup() includes a load-order safety guard: it checks
@@ -123,14 +122,8 @@ Omitting any field falls back to the defaults inside `init.lua`.
 ```lua
 require("swapson").setup({
     npm = {
-        enabled = true,       -- set false to skip npm->bun patching
+        enabled = true,       -- set false to skip npm->bun patching entirely
         tool = "bun",          -- the bun binary name/path
-
-        -- Whether to also patch mason's npm version-lookup client
-        -- (npm view --json) — needed on systems with NO npm installed at all,
-        -- since version lookups would otherwise still shell out to npm
-        -- Default: false
-        patch_version_lookup = false,
     },
     pip = {
         enabled = true,       -- set false to skip pip->uv patching
@@ -149,9 +142,9 @@ Run `:checkhealth swapson` to diagnose your swapson.nvim setup:
 - Checks that mason.nvim is installed and loadable
 - Verifies `bun` and `uv` binaries are on `$PATH`
 - Reports whether each manager is currently patched
-- Reports whether a real `node` is available or a bun-based node shim will be created
+- Reports whether a system `node` is present (informational only — it no longer affects shim creation) and whether the bun-based node shim is active
 - Inspects the node shim file for correct permissions
-- Shows whether `patch_version_lookup` is active (registry API vs. shelling out to npm)
+- Shows whether version lookups are patched (registry API vs. shelling out to npm)
 
 The health check is **read-only**: it never creates, modifies, or removes files
 
