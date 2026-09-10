@@ -32,6 +32,9 @@ function M.apply(pypi_manager, opts)
 	pypi_manager.init = function(opts_init)
 		log.fmt_debug("swapson: pypi init (uv) %s", opts_init)
 		local ctx = installer.context()
+		-- pip3/uv hardcode the full path to venv executables, so we need to promote
+		-- cwd to make sure venv uses the final destination path
+		ctx:promote_cwd()
 		ctx.stdio_sink:stdout("Creating virtual environment via uv…\n")
 		-- uv uses the same venv directory structure as python -m venv, so mason's
 		-- find_venv_executable continues to work after uv creates the venv.
