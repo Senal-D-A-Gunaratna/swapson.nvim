@@ -31,7 +31,10 @@ When npm patching is enabled, swapson.nvim creates a shell wrapper at
 <mason_install_root>/bin/node that delegates to |bun|, so npm-published
 packages with |#!/usr/bin/env node| shebangs run on bun instead of a real
 node runtime. This installs regardless of whether a system |node| is also
-present — it is gated on npm.enabled, not on node being absent
+present — it is gated on npm.enabled, not on node being absent. Setting
+npm.enabled to |false| and calling |setup()| again (e.g. after a config
+change + restart) automatically removes a previously-created shim, not just
+|restore()|
 
 How it works~
 
@@ -142,10 +145,12 @@ to diagnose your swapson.nvim setup. The health check reports:
     - Whether each manager is currently patched
     - Whether a system |node| is present (informational only) and whether
       the bun-based node shim is active
-    - The node shim file permissions
+    - Whether the on-disk node shim content still matches what would be
+      generated today (byte-for-byte drift check), distinguishing a shim
+      that's missing, foreign (no swapson marker), stale (drifted), or current
     - Whether version lookups are patched (registry API vs. shelling out to npm)
 
-The health check is read-only: it never creates, modifies, or removes files.
+The health check is read-only: it never creates, modifies, or removes files
 
 ==============================================================================
 7. API                                           *swapson-api*
