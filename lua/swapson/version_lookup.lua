@@ -10,19 +10,28 @@ function M.apply(npm_client, _opts)
 	local log = require("mason-core.log")
 	local semver = require("mason-core.semver")
 
+	--- Percent-encodes the `/` in a scoped package name for the npm registry's
+	--- URL scheme (e.g. "@foo/bar" -> "@foo%2Fbar"), leaving the "@" and
+	--- unscoped names untouched
+	---@param pkg string
+	---@return string
+	local function escape_pkg_name(pkg)
+		return pkg:gsub("^(@[^/]+)/", "%1%%2F")
+	end
+
 	local originals = {
 		get_latest_version = npm_client.get_latest_version,
 		get_all_versions = npm_client.get_all_versions,
 	}
 
 	npm_client.get_latest_version = function(pkg)
-		return fetch("https://registry.npmjs.org/" .. pkg .. "/latest")
+		return fetch("https://registry.npmjs.org/" .. escape_pkg_name(pkg) .. "/latest")
 			:map_catching(vim.json.decode)
 			:map(_.pick({ "name", "version" }))
 	end
 
 	npm_client.get_all_versions = function(pkg)
-		return fetch("https://registry.npmjs.org/" .. pkg)
+		return fetch("https://registry.npmjs.org/" .. escape_pkg_name(pkg))
 			:map_catching(vim.json.decode)
 			:map(function(data)
 				local entries = {}
