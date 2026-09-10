@@ -79,9 +79,12 @@ local function _apply_patches(opts)
 
 	-- The node shim is part of the npm swap, not a separate feature: it's
 	-- gated on npm.enabled (same toggle as install/uninstall), not a
-	-- dedicated opt.
+	-- dedicated opt. If npm patching is off, make sure any shim we
+	-- previously created is cleaned up rather than left behind stale.
 	if npm_config and npm_config.enabled then
 		require("swapson.node_shim").ensure(opts)
+	else
+		require("swapson.node_shim").remove()
 	end
 
 	state.mark_patched()

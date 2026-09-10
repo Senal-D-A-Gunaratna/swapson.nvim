@@ -90,6 +90,32 @@ function M.check()
 				vim.health.ok(
 					("swapson node shim active at %s (delegating to bun)"):format(node_shim)
 				)
+
+				-- Verify the on-disk shim is still a 1:1 copy of what we'd
+				-- generate today (catches e.g. bun reinstalled at a new path,
+				-- or the file hand-edited).
+				local node_shim_mod = require("swapson.node_shim")
+				local status = node_shim_mod.is_up_to_date(configured_opts or {})
+				if status == "current" then
+					vim.health.ok("node shim content matches the current generated shim")
+				elseif status == "stale" then
+					vim.health.warn(
+						(
+							"node shim content is out of date (drifted from generated shim) at %s"
+							.. " — call require('swapson').setup() again, or delete the file and"
+							.. " restart nvim to regenerate it."
+						):format(node_shim)
+					)
+				elseif status == "foreign" then
+					vim.health.warn(
+						(
+							"file at %s is not a swapson-managed shim (no swapson marker found)"
+							.. " — leaving it untouched."
+						):format(node_shim)
+					)
+				elseif status == "unresolved" then
+					vim.health.info("could not verify node shim content (tool not resolvable)")
+				end
 			else
 				vim.health.error(
 					(
