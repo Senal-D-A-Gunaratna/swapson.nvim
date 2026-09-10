@@ -69,62 +69,82 @@ function M.check()
 	local configured_opts = state.get_opts()
 	local npm_enabled = ((configured_opts or {}).npm or {}).enabled ~= false
 
-	local system_node_path = vim.fn.exepath("node")
-	if system_node_path and system_node_path ~= "" then
+	-- mason.nvim prepends its own bin dir to $PATH by default (settings.PATH
+	-- = "prepend"), and that's exactly where swapson writes the node shim.
+	-- So once the shim exists, plain `vim.fn.exepath("node")` resolves to
+	-- OUR OWN shim, not a genuine system node — it was never actually
+	-- running anything like `type node` against the rest of $PATH. Search
+	-- PATH entries directly, skipping mason's own bin dir, to find a real
+	-- system node (if any) hiding behind the shim.
+	local ok_settings_pre, mason_settings_pre = pcall(require, "mason.settings")
+	local mason_bin_dir = ok_settings_pre
+			and (mason_settings_pre.current.install_root_dir .. "/bin")
+		or nil
+
+	local function find_real_system_node()
+		local sep = vim.uv and vim.uv.os_uname().sysname == "Windows_NT" and ";" or ":"
+		for _, dir in ipairs(vim.split(vim.env.PATH or "", sep, { plain = true })) do
+			if dir ~= "" and dir ~= mason_bin_dir then
+				local candidate = dir .. "/node"
+				if vim.fn.executable(candidate) == 1 then
+					return candidate
+				end
+			end
+		end
+		return nil
+	end
+
+	local real_system_node = find_real_system_node()
+	if real_system_node then
 		vim.health.info(
-			("system node also found at %s (not used by swapson)"):format(system_node_path)
+			("system node also found at %s (not used by swapson)"):format(real_system_node)
 		)
 	else
-		vim.health.info("no system node found on $PATH")
+		vim.health.info("no system node found on $PATH (excluding swapson's own shim)")
 	end
 
 	if not npm_enabled then
 		vim.health.info("npm patching disabled — node shim will not be created")
-	else
-		local ok_settings, mason_settings = pcall(require, "mason.settings")
-		if ok_settings then
-			local node_shim = mason_settings.current.install_root_dir .. "/bin/node"
-			if vim.fn.filereadable(node_shim) == 0 then
-				vim.health.info("node shim not yet created (created on next setup() call)")
-			elseif vim.fn.executable(node_shim) == 1 then
-				vim.health.ok(
-					("swapson node shim active at %s (delegating to bun)"):format(node_shim)
-				)
+	elseif mason_bin_dir then
+		local node_shim = mason_bin_dir .. "/node"
+		if vim.fn.filereadable(node_shim) == 0 then
+			vim.health.info("node shim not yet created (created on next setup() call)")
+		elseif vim.fn.executable(node_shim) == 1 then
+			vim.health.ok(("swapson node shim active at %s (delegating to bun)"):format(node_shim))
 
-				-- Verify the on-disk shim is still a 1:1 copy of what we'd
-				-- generate today (catches e.g. bun reinstalled at a new path,
-				-- or the file hand-edited).
-				local node_shim_mod = require("swapson.node_shim")
-				local status = node_shim_mod.is_up_to_date(configured_opts or {})
-				if status == "current" then
-					vim.health.ok("node shim content matches the current generated shim")
-				elseif status == "stale" then
-					vim.health.warn(
-						(
-							"node shim content is out of date (drifted from generated shim) at %s"
-							.. " — call require('swapson').setup() again, or delete the file and"
-							.. " restart nvim to regenerate it."
-						):format(node_shim)
-					)
-				elseif status == "foreign" then
-					vim.health.warn(
-						(
-							"file at %s is not a swapson-managed shim (no swapson marker found)"
-							.. " — leaving it untouched."
-						):format(node_shim)
-					)
-				elseif status == "unresolved" then
-					vim.health.info("could not verify node shim content (tool not resolvable)")
-				end
-			else
-				vim.health.error(
+			-- Verify the on-disk shim is still a 1:1 copy of what we'd
+			-- generate today (catches e.g. bun reinstalled at a new path,
+			-- or the file hand-edited).
+			local node_shim_mod = require("swapson.node_shim")
+			local status = node_shim_mod.is_up_to_date(configured_opts or {})
+			if status == "current" then
+				vim.health.ok("node shim content matches the current generated shim")
+			elseif status == "stale" then
+				vim.health.warn(
 					(
-						"node shim exists but is not executable at %s"
-						.. " — LSP servers using #!/usr/bin/env node will fail with exit 127."
-						.. " Delete the file and restart nvim to regenerate it."
+						"node shim content is out of date (drifted from generated shim) at %s"
+						.. " — call require('swapson').setup() again, or delete the file and"
+						.. " restart nvim to regenerate it."
 					):format(node_shim)
 				)
+			elseif status == "foreign" then
+				vim.health.warn(
+					(
+						"file at %s is not a swapson-managed shim (no swapson marker found)"
+						.. " — leaving it untouched."
+					):format(node_shim)
+				)
+			elseif status == "unresolved" then
+				vim.health.info("could not verify node shim content (tool not resolvable)")
 			end
+		else
+			vim.health.error(
+				(
+					"node shim exists but is not executable at %s"
+					.. " — LSP servers using #!/usr/bin/env node will fail with exit 127."
+					.. " Delete the file and restart nvim to regenerate it."
+				):format(node_shim)
+			)
 		end
 	end
 
