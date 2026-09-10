@@ -82,8 +82,7 @@ function M.check()
 		or nil
 
 	local function find_real_system_node()
-		local sep = vim.uv and vim.uv.os_uname().sysname == "Windows_NT" and ";" or ":"
-		for _, dir in ipairs(vim.split(vim.env.PATH or "", sep, { plain = true })) do
+		for _, dir in ipairs(vim.split(vim.env.PATH or "", ":", { plain = true })) do
 			if dir ~= "" and dir ~= mason_bin_dir then
 				local candidate = dir .. "/node"
 				if vim.fn.executable(candidate) == 1 then
