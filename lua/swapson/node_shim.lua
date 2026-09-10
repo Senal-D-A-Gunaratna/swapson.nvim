@@ -66,7 +66,18 @@ function M.ensure(opts)
 	local mason_bin = mason_settings.current.install_root_dir .. "/bin"
 	local node_shim = mason_bin .. "/node"
 	if vim.fn.executable(node_shim) == 1 then
-		return
+		local status = M.is_up_to_date(opts)
+		if status == "current" then
+			return
+		end
+		if status == "foreign" then
+			-- Not ours (no marker) — leave whatever's there alone rather
+			-- than clobbering a real node binary or unrelated shim.
+			return
+		end
+		-- "stale" (content drifted, e.g. bun reinstalled at a new path) or
+		-- "unresolved" falls through and regenerates below.
+		log.fmt_debug("swapson: node shim at %s is %s, regenerating", node_shim, status)
 	end
 
 	local bun_path = resolve_tool_path(opts)
