@@ -144,8 +144,13 @@ Run `:checkhealth swapson` to diagnose your swapson.nvim setup:
 - Checks that mason.nvim is installed and loadable
 - Verifies `bun` and `uv` binaries are on `$PATH`
 - Reports whether each manager is currently patched
-- Reports whether a system `node` is present (informational only — it no longer affects shim creation) and whether the bun-based node shim is active
-- Verifies the on-disk node shim content still matches what would be generated today (byte-for-byte drift check against the current `bun` path/tool config), distinguishing a shim that's missing, foreign (no swapson marker), stale (drifted), or current
+- Reports whether a system `node` is present (informational only — it
+  no longer affects shim creation) and whether the bun-based node shim
+  is active
+- Verifies the on-disk node shim content still matches what would be
+  generated today (byte-for-byte drift check against the current
+  `bun` path/tool config), distinguishing a shim that's missing,
+  foreign (no swapson marker), stale (drifted), or current
 - Shows whether version lookups are patched (registry API vs. shelling out to npm)
 
 The health check is **read-only**: it never creates, modifies, or removes files
