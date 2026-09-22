@@ -2,14 +2,12 @@
 
 A companion plugin for [mason.nvim](https://github.com/mason-org/mason.nvim) that
 routes package installs through faster alternative package managers instead of
-the defaults (npm, pip)
+the defaults (npm, pip) — and runs npm-sourced packages via bun instead of node
 
-## Supported swaps
-
-| mason manager | Default tool | Swapped tool |
-| ------------- | ------------ | ------------ |
-| npm           | npm          | **bun**      |
-| pip (pypi)    | pip          | **uv**       |
+> **Compatibility**: most npm packages run fine on bun, but the occasional rare
+> package — e.g. native `node-gyp` addons — may behave differently. The
+> `enabled` flags and `require("swapson").restore()` cover exactly this case;
+> see [Caveats](#caveats)
 
 ## Why?
 
@@ -55,13 +53,11 @@ modified
 > **Note — the node shim**: When npm patching is enabled, swapson.nvim creates
 > a shell wrapper at `<mason_install_root>/bin/node` that delegates to `bun`,
 > so npm-published packages with `#!/usr/bin/env node` shebangs run on bun
-> instead of a real node runtime. This installs regardless of whether a
-> system `node` is also present — the swap now covers execution as well as
-> install, not just install. It's gated on `npm.enabled` (the same toggle
-> that controls the install/uninstall patch), not on a separate opt: set
-> `npm.enabled = false` if you want npm-sourced packages to install _and_
-> run on stock npm/node. Setting `npm.enabled = false` and calling `setup()`
-> again (e.g. after a config change + restart) automatically removes a
+> rather than a real node runtime — regardless of whether a system `node` is
+> also present. It's gated on `npm.enabled` (the same toggle that controls the
+> install/uninstall patch), not a separate opt: set `npm.enabled = false` to
+> install _and_ run npm-sourced packages on stock npm/node. Re-running
+> `setup()` with npm disabled (e.g. after a config change + restart) removes a
 > previously-created shim, not just `restore()`
 
 ## Requirements
@@ -71,7 +67,7 @@ modified
 - `bun` installed and on `$PATH` (for npm swaps)
 - `uv` installed and on `$PATH` (for pip swaps)
 - **Platform**: Linux (tested); macOS should work but is unverified; Windows is
-  not supported (node shim is POSIX shell only)
+  not and will not be supported (node shim is POSIX shell only)
 
 ## Installation (lazy.nvim)
 
