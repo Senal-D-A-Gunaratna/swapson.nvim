@@ -16,6 +16,7 @@ function M.apply(pypi_manager, opts)
 	local Result = require("mason-core.result")
 	local installer = require("mason-core.installer")
 	local log = require("mason-core.log")
+	local providers = require("mason-core.providers")
 	local SystemPackage = require("mason-core.system-package")
 
 	local originals = {
@@ -25,20 +26,68 @@ function M.apply(pypi_manager, opts)
 	}
 
 	-- Patch init()
-	-- Original: resolve python3, then `python3 -m venv --system-site-packages venv`,
+	-- Original: promote cwd, resolve a python3 matching the package's
+	-- requires-python, then `python3 -m venv --system-site-packages venv`,
 	-- optionally upgrade pip inside venv.
-	-- uv variant: `uv venv --system-site-packages venv` (skip pip upgrade — uv
-	-- bundles its own pip equivalent and ensurepip is not needed).
+	-- uv variant: `uv venv --python <requires-python> --system-site-packages venv`.
+	-- uv resolves the specifier itself, honouring the user's uv config
+	-- (python-preference, python-downloads). `--seed` stands in for the pip
+	-- upgrade, since uv venvs contain no pip by default.
 	pypi_manager.init = function(opts_init)
+		opts_init = opts_init or {}
 		log.fmt_debug("swapson: pypi init (uv) %s", opts_init)
 		local ctx = installer.context()
-		-- pip3/uv hardcode the full path to venv executables, so we need to promote
-		-- cwd to make sure venv uses the final destination path
+
+		-- Scripts in the venv hardcode the absolute path of the venv python, so the
+		-- venv must be created at its final location, not in mason's staging dir.
 		ctx:promote_cwd()
-		ctx.stdio_sink:stdout("Creating virtual environment via uv…\n")
+
+		local requires_python
+		if opts_init.package then
+			requires_python = providers.pypi
+				.get_supported_python_versions(opts_init.package.name, opts_init.package.version)
+				:get_or_nil()
+		end
+
+		local function create_venv(python)
+			return ctx.spawn[opts.tool]({
+				"venv",
+				python and { "--python", python } or vim.NIL,
+				opts_init.upgrade_pip and "--seed" or vim.NIL,
+				"--system-site-packages",
+				"venv",
+			})
+		end
+
 		-- uv uses the same venv directory structure as python -m venv, so mason's
 		-- find_venv_executable continues to work after uv creates the venv.
-		return ctx.spawn[opts.tool]({ "venv", "--system-site-packages", "venv" })
+		if not requires_python then
+			ctx.stdio_sink:stdout("Creating virtual environment via uv…\n")
+			return create_venv(nil)
+		end
+
+		ctx.stdio_sink:stdout(
+			("Creating virtual environment via uv (Python %s)…\n"):format(requires_python)
+		)
+		local result = create_venv(requires_python)
+		if result:is_success() then
+			return result
+		end
+		if ctx.opts.force then
+			ctx.stdio_sink:stderr(
+				(
+					"Warning: no Python interpreter matching %s was found."
+					.. " Falling back to uv's default interpreter.\n"
+				):format(requires_python)
+			)
+			return create_venv(nil)
+		end
+		ctx.stdio_sink:stderr("Run with :MasonInstall --force to bypass this version validation.\n")
+		return Result.failure(
+			("Failed to find a Python interpreter that meets the required versions (%s)."):format(
+				requires_python
+			)
+		)
 	end
 
 	-- Patch install()
