@@ -133,6 +133,14 @@ require("swapson").setup({
 Each manager falls back gracefully to mason's default behavior if its
 configured tool is not found on `$PATH`, with a `vim.notify()` warning
 
+For pip packages, the virtual environment is created with
+`uv venv --python <requires-python>`, so uv picks the interpreter that satisfies
+the package's `requires-python`. Which interpreters uv considers (uv-managed or
+system ones on `$PATH`) and whether it may download one follow your uv config,
+e.g. `python-preference` and `python-downloads` in `uv.toml`. If no interpreter
+matches, the install fails; `:MasonInstall --force` falls back to uv's default
+interpreter.
+
 ## Health check
 
 Run `:checkhealth swapson` to diagnose your swapson.nvim setup:

@@ -123,6 +123,13 @@ pip.enabled                                    *swapson-config-pip-enabled*
 pip.tool                                       *swapson-config-pip-tool*
     String. The uv binary name or path. Default: |"uv"|
 
+    The virtual environment is created with `uv venv --python
+    <requires-python>`, so uv picks an interpreter that satisfies the
+    package's requires-python. Whether uv may use uv-managed interpreters or
+    download one follows your uv config (`python-preference`,
+    `python-downloads`). If none matches, the install fails;
+    `:MasonInstall --force` falls back to uv's default interpreter.
+
 Each manager falls back gracefully to mason's default behavior if its
 configured tool is not found on $PATH, with a |vim.notify()| warning
 
