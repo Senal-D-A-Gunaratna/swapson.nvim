@@ -52,8 +52,8 @@ module path shares. No files are modified
     - mason.nvim (https://github.com/mason-org/mason.nvim)
     - |bun| installed and on $PATH (for npm swaps)
     - |uv| installed and on $PATH (for pip swaps)
-    - Linux (tested); macOS should work but is unverified; Windows is not
-      and will not be supported (node shim is POSIX shell only)
+    - Linux and macOS (both tested); Windows is not and will not be
+      supported (node shim is POSIX shell only)
 
 ==============================================================================
 3. INSTALLATION                                    *swapson-installation*
@@ -127,8 +127,18 @@ pip.tool                                       *swapson-config-pip-tool*
     <requires-python>`, so uv picks an interpreter that satisfies the
     package's requires-python. Whether uv may use uv-managed interpreters or
     download one follows your uv config (`python-preference`,
-    `python-downloads`). If none matches, the install fails;
-    `:MasonInstall --force` falls back to uv's default interpreter.
+    `python-downloads`). If nothing satisfies the specifier, the install
+    fails — most often because downloads are disabled
+    (`python-downloads = "manual"`) or you are offline, since uv
+    downloads a matching interpreter by default. `:MasonInstall --force`
+    (a mason flag, not uv's unrelated `--force`) falls back to uv's
+    default interpreter.
+
+    Mason's `pip.upgrade_pip` setting is honoured as well: swapson passes
+    `--seed`, which adds |pip| — plus setuptools and wheel, which uv omits
+    on Python 3.12+ — to the venv. This only matters if something other
+    than `uv pip install` expects pip to be present, since swapson drives
+    uv directly for the actual install.
 
 Each manager falls back gracefully to mason's default behavior if its
 configured tool is not found on $PATH, with a |vim.notify()| warning

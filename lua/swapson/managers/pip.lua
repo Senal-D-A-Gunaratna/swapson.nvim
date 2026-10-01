@@ -31,8 +31,12 @@ function M.apply(pypi_manager, opts)
 	-- optionally upgrade pip inside venv.
 	-- uv variant: `uv venv --python <requires-python> --system-site-packages venv`.
 	-- uv resolves the specifier itself, honouring the user's uv config
-	-- (python-preference, python-downloads). `--seed` stands in for the pip
-	-- upgrade, since uv venvs contain no pip by default.
+	-- (python-preference, python-downloads), and downloads a matching
+	-- interpreter unless python-downloads is disabled.
+	-- `--seed` maps mason's `upgrade_pip`: it installs pip, plus setuptools
+	-- and wheel (which uv omits on Python 3.12+). Our own install path uses
+	-- `uv pip install`, so it doesn't need pip in the venv -- the seed only
+	-- matters to anything else that assumes pip is there.
 	pypi_manager.init = function(opts_init)
 		opts_init = opts_init or {}
 		log.fmt_debug("swapson: pypi init (uv) %s", opts_init)
@@ -73,6 +77,11 @@ function M.apply(pypi_manager, opts)
 		if result:is_success() then
 			return result
 		end
+		-- Note: uv gives no structured reason for the failure, so *any* venv
+		-- error is reported as an unsatisfied specifier here -- a broken uv.toml
+		-- or a full disk looks the same as "no matching interpreter". Mason,
+		-- which resolves the interpreter itself, can only fail this way when the
+		-- version genuinely doesn't match.
 		if ctx.opts.force then
 			ctx.stdio_sink:stderr(
 				(

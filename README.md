@@ -66,8 +66,8 @@ modified
 - [mason.nvim](https://github.com/mason-org/mason.nvim)
 - `bun` installed and on `$PATH` (for npm swaps)
 - `uv` installed and on `$PATH` (for pip swaps)
-- **Platform**: Linux (tested); macOS should work but is unverified; Windows is
-  not and will not be supported (node shim is POSIX shell only)
+- **Platform**: Linux and macOS (both tested); Windows is not and will not be
+  supported (node shim is POSIX shell only)
 
 ## Installation (lazy.nvim)
 
@@ -137,9 +137,16 @@ For pip packages, the virtual environment is created with
 `uv venv --python <requires-python>`, so uv picks the interpreter that satisfies
 the package's `requires-python`. Which interpreters uv considers (uv-managed or
 system ones on `$PATH`) and whether it may download one follow your uv config,
-e.g. `python-preference` and `python-downloads` in `uv.toml`. If no interpreter
-matches, the install fails; `:MasonInstall --force` falls back to uv's default
-interpreter.
+e.g. `python-preference` and `python-downloads` in `uv.toml`. If nothing
+satisfies the specifier, the install fails — most often because downloads are
+disabled (`python-downloads = "manual"`) or you're offline, since uv downloads a
+matching interpreter by default. mason's `:MasonInstall --force` (a mason flag,
+not uv's unrelated `--force`) falls back to uv's default interpreter.
+
+Mason's `pip.upgrade_pip` setting is honoured as well: swapson passes `--seed`,
+which adds `pip` — plus `setuptools` and `wheel`, which uv omits on Python 3.12+
+— to the venv. That only matters if something other than `uv pip install` expects
+pip to be there, since swapson drives uv directly for the actual install.
 
 ## Health check
 
@@ -180,9 +187,12 @@ bun's and uv's behavior isn't a drop-in match for npm/pip in every case:
 - **npm side**: packages with `node-gyp` native addons, npm-specific
   `postinstall` hooks, or deep scoped dependency trees are the most likely to
   behave differently under bun than under npm
-- **pip side**: swapson's uv-based `init` skips the pip-upgrade step entirely
-  (uv bundles its own pip equivalent), which is a behavior difference from
-  stock mason.nvim even though it's intentional
+- **pip side**: interpreter selection is delegated to uv rather than reimplemented,
+  so where mason probes `$PATH` for a `python3.x` matching the package's
+  `requires-python`, swapson hands the specifier to `uv venv --python` and lets
+  uv resolve it under your uv config. That is usually equivalent, but it can pick
+  a uv-managed or freshly downloaded interpreter where mason would have used a
+  system one
 
 This is expected to affect a small minority of packages, and the `enabled`
 flags or `require("swapson").restore()` are there for exactly this case — if a
